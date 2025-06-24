@@ -13,11 +13,11 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <!-- Babel Standalone for JSX transformation in browser (for development/single file) -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <!-- Lucide React Icons (replace with direct SVG or local import for production build) -->
-  <!-- For this single-file setup, we'll manually include an SVG for the Sparkles icon since Lucide React needs a build step -->
   <style>
     body {
       font-family: 'Inter', sans-serif;
+      margin: 0;
+      /* Removido overflow: hidden para permitir rolagem */
     }
     /* Simple animation for loading spinner */
     .animate-spin {
@@ -37,15 +37,43 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    // Importa useState e useEffect do objeto React global
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
 
-    // Componente Toast para mensagens temporárias
+    // --- CONFIGURAÇÃO DO BACKEND ---
+    // URL do seu servidor backend hospedado no Glitch.
+    const BACKEND_URL = "https://biostartserver.glitch.me"; 
+
+    // --- SIMULAÇÃO DE WEB STORAGE (USA localStorage) ---
+    const WebStorage = {
+      getItem: async (key) => {
+        try {
+          return localStorage.getItem(key);
+        } catch (e) {
+          console.error("Erro ao ler do localStorage:", e);
+          return null;
+        }
+      },
+      setItem: async (key, value) => {
+        try {
+          localStorage.setItem(key, value);
+        } catch (e) {
+          console.error("Erro ao escrever no localStorage:", e);
+        }
+      },
+      removeItem: async (key) => {
+        try {
+          localStorage.removeItem(key);
+        } catch (e) {
+          console.error("Erro ao remover do localStorage:", e);
+        }
+      }
+    };
+
+    // --- Componentes Reutilizáveis (Toast, Modal, Ícones, Botões de Navegação) ---
+
     const Toast = ({ message, type, onClose }) => {
       if (!message) return null;
-
       const bgColor = type === 'success' ? 'bg-green-500' : 'bg-blue-500';
-
       return (
         <div className={`fixed bottom-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg z-50 transition-transform duration-300 transform translate-y-0`}>
           <div className="flex items-center justify-between">
@@ -58,10 +86,8 @@
       );
     };
 
-    // Componente Modal Genérico
     const Modal = ({ isOpen, onClose, title, children }) => {
       if (!isOpen) return null;
-
       return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
           <div className="bg-white p-6 rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
@@ -71,34 +97,336 @@
                 &times;
               </button>
             </div>
-            <div>
-              {children}
-            </div>
+            <div>{children}</div>
           </div>
         </div>
       );
     };
 
-    // Ícones Lucide React (Substituídos por SVG inline para esta demonstração sem build)
-    // Em um ambiente de build real, você importaria de 'lucide-react'
-    const HomeIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-home"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>);
-    const BookTextIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-book-text"><path d="M4 19.5V15a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/><path d="M4 12V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6"/><path d="M9 10h6"/></svg>);
-    const UsersIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-users"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>);
-    const MessageSquareIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-message-square"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>);
-    const BarChartIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-bar-chart"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg>);
-    const PlusCircleIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-plus-circle"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>);
-    const EditIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-edit"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>);
-    const Trash2Icon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-trash-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>);
-    const CheckCircleIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-check-circle"><path d="M22 11.08V12a10 10 0 1 1-5.93-8.5"/><polyline points="22 4 12 14.01 9 11.01"/></svg>);
-    const XCircleIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-x-circle"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>);
-    const SparklesIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-sparkles"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.272 1.272L3 12l5.813 1.912a2 2 0 0 1 1.272 1.272L12 21l1.912-5.813a2 2 0 0 1 1.272-1.272L21 12l-5.813-1.912a2 2 0 0 1-1.272-1.272Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M2.75 7.25h4.5"/><path d="M16.25 16.75h4.5"/></svg>);
+    // Ícones Lucide React (Renderizados como SVG inline para não precisar de build)
+    const HomeIcon = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-home"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>);
+    const BookTextIcon = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-book-text"><path d="M4 19.5V15a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/><path d="M4 12V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6"/><path d="M9 10h6"/></svg>);
+    const UsersIcon = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-users"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>);
+    const MessageSquareIcon = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-message-square"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>);
+    const BarChartIcon = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-bar-chart"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg>);
+    const PlusCircleIcon = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-plus-circle"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>);
+    const EditIcon = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-edit"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>);
+    const Trash2Icon = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-trash-2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>);
+    const CheckCircleIcon = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-check-circle"><path d="M22 11.08V12a10 10 0 1 1-5.93-8.5"/><polyline points="22 4 12 14.01 9 11.01"/></svg>);
+    const XCircleIcon = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-x-circle"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>);
+    const SparklesIcon = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-sparkles"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.272 1.272L3 12l5.813 1.912a2 2 0 0 1 1.272 1.272L12 21l1.912-5.813a2 2 0 0 1 1.272-1.272L21 12l-5.813-1.912a2 2 0 0 1-1.272-1.272Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M2.75 7.25h4.5"/><path d="M16.25 16.75h4.5"/></svg>);
+    const SunIcon = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-sun"><circle cx="12" cy="12" r="8"/><line x1="12" x2="12" y1="2" y2="4"/><line x1="12" x2="12" y1="20" y2="22"/><line x1="4.22" x2="5.64" y1="4.22" y2="5.64"/><line x1="18.36" x2="19.78" y1="18.36" y2="19.78"/><line x1="2" x2="4" y1="12" y2="12"/><line x1="20" x2="22" y1="12" y2="12"/><line x1="4.22" x2="5.64" y1="19.78" y2="18.36"/><line x1="18.36" x2="19.78" y1="5.64" y2="4.22"/></svg>);
+    const EyeIcon = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-eye"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>);
+    const EyeOffIcon = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-eye-off"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-10-7-10-7a1.8 1.8 0 0 1 .31-1.24L4.35 9.7M8.67 8.67 6 6c-3.14 2.8-4.58 5.25-4.83 5.79a1.82 1.82 0 0 0-.31 1.24C2 15 5 20 12 20c.95 0 1.9-.11 2.82-.32"/><path d="M15.46 15.46 19 19m-4.54-4.54a3 3 0 0 0-4.24-4.24m3.04 3.04.5.5Z"/><line x1="2" x2="22" y1="2" y2="22"/></svg>);
+    const SquareIcon = (props) => (<svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-square"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>);
+
+
+    // --- Componente AuthPage (para login e registo na Web) ---
+    const AuthPage = ({ onAuthSuccess, showToast }) => {
+      const [isRegistering, setIsRegistering] = useState(false);
+      const [name, setName] = useState('');
+      const [email, setEmail] = useState('');
+      const [password, setPassword] = useState('');
+      const [confirmPassword, setConfirmPassword] = useState('');
+      const [age, setAge] = useState('');
+      const [regionCity, setRegionCity] = useState('');
+      const [profession, setProfession] = useState('');
+      const [renewableEnergyExperience, setRenewableEnergyExperience] = useState('');
+      const [acceptTerms, setAcceptTerms] = useState(false);
+      const [showPassword, setShowPassword] = useState(false);
+      const [isLoading, setIsLoading] = useState(false);
+
+      const handleAuth = async () => {
+        setIsLoading(true);
+        console.log("AuthPage: handleAuth iniciado. A registar?", isRegistering);
+
+        try {
+          let response;
+          let data;
+
+          if (isRegistering) {
+            // --- Lógica de Registo ---
+            if (!name || !email || !password || !confirmPassword || !age || !regionCity) {
+              showToast('Por favor, preencha todos os campos obrigatórios.', 'error');
+              setIsLoading(false);
+              return;
+            }
+            if (password !== confirmPassword) {
+              showToast('As senhas não coincidem.', 'error');
+              setIsLoading(false);
+              return;
+            }
+            if (!acceptTerms) {
+              showToast('Você deve aceitar os termos de uso e política de privacidade.', 'error');
+              setIsLoading(false);
+              return;
+            }
+
+            console.log("AuthPage: A enviar dados de registo para o backend...");
+            response = await fetch(`${BACKEND_URL}/registro`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                name,
+                email,
+                password,
+                age,
+                regionCity,
+                profession,
+                renewableEnergyExperience,
+                acceptTerms,
+              }),
+            });
+            data = await response.json();
+            console.log("AuthPage: Resposta do backend para registo:", data);
+
+            if (response.ok && data.success) {
+              showToast(`Bem-vindo(a), ${name}! Registo bem-sucedido.`, 'success');
+              onAuthSuccess(name, email, data.recordId);
+            } else {
+              showToast(data.error || 'Não foi possível registar. Tente novamente.', 'error');
+            }
+
+          } else {
+            // --- Lógica de Login ---
+            if (!email || !password) {
+              showToast('Por favor, insira o seu email e senha.', 'error');
+              setIsLoading(false);
+              return;
+            }
+
+            console.log("AuthPage: A enviar dados de login para o backend...");
+            response = await fetch(`${BACKEND_URL}/login`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ email, password }),
+            });
+            data = await response.json();
+            console.log("AuthPage: Resposta do backend para login:", data);
+
+            if (response.ok && data.success) {
+              showToast(`Bem-vindo(a) de volta, ${data.user['Nome Completo']}!`, 'success');
+              onAuthSuccess(data.user['Nome Completo'], email, data.recordId);
+            } else {
+              showToast(data.error || 'Email ou senha incorretos.', 'error');
+            }
+          }
+        } catch (error) {
+          console.error("AuthPage: Erro de conexão ou inesperado:", error);
+          showToast('Não foi possível conectar ao servidor. Verifique o URL do backend.', 'error');
+        } finally {
+          setIsLoading(false);
+          console.log("AuthPage: Autenticação concluída.");
+        }
+      };
+
+      return (
+        // Contenitor principal da AuthPage, com fundo escuro e scroll
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 py-8 px-4 overflow-y-auto">
+          {/* Card de Autenticação */}
+          <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full flex flex-col items-center">
+            <SunIcon className="w-16 h-16 text-green-500 mb-6" />
+            <h2 className="text-3xl font-bold text-gray-800 mb-2 text-center">
+              {isRegistering ? 'Junte-se ao BioStart!' : 'Iniciar Sessão'}
+            </h2>
+            <p className="text-gray-600 mb-6 text-center text-base">
+              {isRegistering ? 'Preencha os seus dados para começar a sua jornada na energia limpa' : 'Entre na sua conta para continuar'}
+            </p>
+
+            {isRegistering && (
+              <>
+                <div className="w-full mb-4">
+                  <label htmlFor="name" className="block text-lg font-semibold text-gray-700 mb-1">Nome completo *</label>
+                  <input
+                    type="text"
+                    id="name"
+                    placeholder="Seu nome completo"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-gray-800"
+                  />
+                </div>
+              </>
+            )}
+            <div className="w-full mb-4">
+              <label htmlFor="email" className="block text-lg font-semibold text-gray-700 mb-1">Email *</label>
+              <input
+                type="email"
+                id="email"
+                placeholder="Seu email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoCapitalize="none"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-gray-800"
+              />
+            </div>
+            <div className="w-full mb-4">
+              <label htmlFor="password" className="block text-lg font-semibold text-gray-700 mb-1">Senha *</label>
+              <div className="flex items-center w-full p-3 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-green-500">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  id="password"
+                  placeholder="Senha"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="flex-1 text-gray-800 outline-none"
+                />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="ml-2 text-gray-500 hover:text-gray-700">
+                  {showPassword ? <EyeOffIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+            {isRegistering && (
+              <>
+                <div className="w-full mb-6">
+                  <label htmlFor="confirmPassword" className="block text-lg font-semibold text-gray-700 mb-1">Confirmar Senha *</label>
+                  <div className="flex items-center w-full p-3 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-green-500">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      id="confirmPassword"
+                      placeholder="Confirmar Senha"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="flex-1 text-gray-800 outline-none"
+                    />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="ml-2 text-gray-500 hover:text-gray-700">
+                      {showPassword ? <EyeOffIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Novos campos de perfil */}
+                <div className="w-full mb-4">
+                  <label htmlFor="age" className="block text-lg font-semibold text-gray-700 mb-1">Idade *</label>
+                  <input
+                    type="number"
+                    id="age"
+                    placeholder="Sua idade"
+                    value={age}
+                    onChange={(e) => setAge(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-gray-800"
+                  />
+                </div>
+
+                <div className="w-full mb-4">
+                  <label htmlFor="regionCity" className="block text-lg font-semibold text-gray-700 mb-1">Região/Cidade *</label>
+                  <input
+                    type="text"
+                    id="regionCity"
+                    placeholder="Sua cidade/estado"
+                    value={regionCity}
+                    onChange={(e) => setRegionCity(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-gray-800"
+                  />
+                </div>
+
+                <div className="w-full mb-4">
+                  <label htmlFor="profession" className="block text-lg font-semibold text-gray-700 mb-1">Profissão/Ocupação</label>
+                  <input
+                    type="text"
+                    id="profession"
+                    placeholder="Ex: Estudante, Agricultor, Engenheiro..."
+                    value={profession}
+                    onChange={(e) => setProfession(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-gray-800"
+                  />
+                </div>
+
+                <div className="w-full mb-6">
+                  <label htmlFor="renewableEnergyExperience" className="block text-lg font-semibold text-gray-700 mb-1">Experiência com energia renovável (opcional)</label>
+                  <textarea
+                    id="renewableEnergyExperience"
+                    placeholder="Conte um pouco sobre sua experiência ou interesse em energia renovável"
+                    value={renewableEnergyExperience}
+                    onChange={(e) => setRenewableEnergyExperience(e.target.value)}
+                    rows="4"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-gray-800 min-h-[80px]"
+                  ></textarea>
+                </div>
+
+                <label htmlFor="acceptTerms" className="flex items-center w-full mb-6 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    id="acceptTerms"
+                    checked={acceptTerms}
+                    onChange={(e) => setAcceptTerms(e.target.checked)}
+                    className="hidden" // Esconde o checkbox padrão
+                  />
+                  {acceptTerms ? (
+                    <CheckCircleIcon className="text-green-600 mr-2 w-5 h-5" />
+                  ) : (
+                    <SquareIcon className="text-gray-500 mr-2 w-5 h-5" />
+                  )}
+                  <span className="text-base text-gray-800">Aceito os termos de uso e política de privacidade do BioStart <span className="text-red-500">*</span></span>
+                </label>
+              </>
+            )}
+
+            <button
+              onClick={handleAuth}
+              className={`w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform flex items-center justify-center mb-4
+                ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <div className="animate-spin mr-2 w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
+              ) : (
+                <>
+                  <span>{isRegistering ? 'Criar conta no BioStart' : 'Entrar'}</span>
+                  {isRegistering && <span className="text-white text-lg ml-2">→</span>}
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={() => setIsRegistering(!isRegistering)}
+              className="mt-2 text-green-600 text-base font-semibold hover:underline"
+              disabled={isLoading}
+            >
+              {isRegistering ? 'Já tem uma conta? Faça login' : 'Não tem uma conta? Registar-se'}
+            </button>
+          </div>
+        </div>
+      );
+    };
 
 
     // Componente Principal da Aplicação
     const App = () => {
-      const [activeScreen, setActiveScreen] = useState('dashboard');
+      const [loggedInUser, setLoggedInUser] = useState(null); // Armazena o utilizador autenticado
+      const [userRecordId, setUserRecordId] = useState(null); // Armazena o ID do registo Airtable do utilizador
+      const [activeScreen, setActiveScreen] = useState('splash'); // Começa com a tela de splash
       const [toastMessage, setToastMessage] = useState('');
       const [toastType, setToastType] = useState('info');
+
+      // Efeito para verificar o login persistente no localStorage ao carregar a app (APÓS SPLASH)
+      useEffect(() => {
+        const checkPersistentLogin = async () => {
+          const storedEmail = await WebStorage.getItem('loggedInUserEmail');
+          const storedRecordId = await WebStorage.getItem('userAirtableRecordId');
+          
+          if (storedEmail && storedRecordId) {
+            setLoggedInUser({ name: storedEmail }); // Nome temporário para mostrar no UI
+            setUserRecordId(storedRecordId);
+            showToast('Login automático. Bem-vindo(a) de volta!', 'success');
+            setActiveScreen('dashboard'); // Se logado, vai para a dashboard
+          } else {
+            setActiveScreen('auth'); // Se não logado, vai para a autenticação
+          }
+        };
+
+        if (activeScreen === 'splash') { // Chama a verificação de login após a splash
+            // Simula um tempo de splash antes de verificar o login
+            setTimeout(() => {
+                checkPersistentLogin();
+            }, 2000); // Exibe a splash por 2 segundos
+        }
+      }, [activeScreen]);
+
 
       // Função para exibir mensagens Toast
       const showToast = (message, type = 'info') => {
@@ -107,7 +435,81 @@
         setTimeout(() => setToastMessage(''), 3000); // Esconde após 3 segundos
       };
 
-      // Renderiza a tela ativa com base no estado
+      // Função chamada após autenticação bem-sucedida (login ou registo)
+      const handleAuthSuccess = async (name, email, recordId) => {
+        setLoggedInUser({ name: name, email: email });
+        setUserRecordId(recordId);
+        await WebStorage.setItem('loggedInUserEmail', email);
+        await WebStorage.setItem('userAirtableRecordId', recordId);
+        showToast('Autenticação bem-sucedida!', 'success');
+        setActiveScreen('dashboard'); // Navega para a dashboard após login/registo
+      };
+
+      // Função de Logout
+      const handleLogout = async () => {
+        await WebStorage.removeItem('loggedInUserEmail');
+        await WebStorage.removeItem('userAirtableRecordId');
+        setLoggedInUser(null);
+        setUserRecordId(null);
+        setToastMessage('Sessão encerrada.', 'info');
+        setActiveScreen('auth'); // Volta para a AuthPage após logout
+      };
+
+      // Renderiza a tela ativa com base no estado de autenticação e navegação
+      const renderContent = () => {
+        if (activeScreen === 'splash') {
+          return (
+            <div className="flex items-center justify-center min-h-screen bg-green-500">
+              {/* Conteúdo da Splash Screen */}
+              <div className="flex flex-col items-center">
+                <svg className="animate-spin text-white w-20 h-20 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <h1 className="text-4xl font-bold text-white">Carregando...</h1>
+              </div>
+            </div>
+          );
+        } else if (activeScreen === 'auth') {
+          return <AuthPage onAuthSuccess={handleAuthSuccess} showToast={showToast} />;
+        } else {
+          // Se estiver logado e não na splash/auth, mostra a barra lateral e o conteúdo da admin
+          return (
+            <div className="flex flex-col md:flex-row min-h-screen bg-gray-100 font-inter">
+              {/* Navegação da Barra Lateral */}
+              <aside className="w-full md:w-64 bg-green-800 text-white p-4 rounded-b-lg md:rounded-r-lg shadow-lg">
+                <h1 className="text-2xl font-bold mb-6 text-center">Admin Biogás</h1>
+                <nav>
+                  <ul>
+                    <NavItem icon={<HomeIcon className="mr-2" />} text="Dashboard" isActive={activeScreen === 'dashboard'} onClick={() => setActiveScreen('dashboard')} />
+                    <NavItem icon={<BookTextIcon className="mr-2" />} text="Gestão de Conteúdo" isActive={activeScreen === 'contentManagement'} onClick={() => setActiveScreen('contentManagement')} />
+                    <NavItem icon={<UsersIcon className="mr-2" />} text="Gestão de Usuários" isActive={activeScreen === 'userManagement'} onClick={() => setActiveScreen('userManagement')} />
+                    <NavItem icon={<MessageSquareIcon className="mr-2" />} text="Dúvidas dos Usuários" isActive={activeScreen === 'userDoubts'} onClick={() => setActiveScreen('userDoubts')} />
+                    <NavItem icon={<BarChartIcon className="mr-2" />} text="Relatórios" isActive={activeScreen === 'reports'} onClick={() => setActiveScreen('reports')} />
+                    
+                    {/* Botão de Logout */}
+                    <li className="mt-8">
+                      <button
+                        onClick={handleLogout}
+                        className="flex items-center w-full p-3 rounded-lg bg-red-600 hover:bg-red-700 font-semibold shadow-md transition-all duration-200"
+                      >
+                        Sair ({loggedInUser.name})
+                      </button>
+                    </li>
+                  </ul>
+                </nav>
+              </aside>
+
+              {/* Área de Conteúdo Principal */}
+              <main className="flex-1 p-6 md:p-8 overflow-auto">
+                {renderScreen()}
+              </main>
+            </div>
+          );
+        }
+      };
+
+      // Renderiza a tela ativa para usuários logados
       const renderScreen = () => {
         switch (activeScreen) {
           case 'dashboard':
@@ -126,27 +528,10 @@
       };
 
       return (
-        <div className="flex flex-col md:flex-row min-h-screen bg-gray-100 font-inter">
-          {/* Navegação da Barra Lateral */}
-          <aside className="w-full md:w-64 bg-green-800 text-white p-4 rounded-b-lg md:rounded-r-lg shadow-lg">
-            <h1 className="text-2xl font-bold mb-6 text-center">Admin Biogás</h1>
-            <nav>
-              <ul>
-                <NavItem icon={<HomeIcon className="mr-2" />} text="Dashboard" isActive={activeScreen === 'dashboard'} onClick={() => setActiveScreen('dashboard')} />
-                <NavItem icon={<BookTextIcon className="mr-2" />} text="Gestão de Conteúdo" isActive={activeScreen === 'contentManagement'} onClick={() => setActiveScreen('contentManagement')} />
-                <NavItem icon={<UsersIcon className="mr-2" />} text="Gestão de Usuários" isActive={activeScreen === 'userManagement'} onClick={() => setActiveScreen('userManagement')} />
-                <NavItem icon={<MessageSquareIcon className="mr-2" />} text="Dúvidas dos Usuários" isActive={activeScreen === 'userDoubts'} onClick={() => setActiveScreen('userDoubts')} />
-                <NavItem icon={<BarChartIcon className="mr-2" />} text="Relatórios" isActive={activeScreen === 'reports'} onClick={() => setActiveScreen('reports')} />
-              </ul>
-            </nav>
-          </aside>
-
-          {/* Área de Conteúdo Principal */}
-          <main className="flex-1 p-6 md:p-8 overflow-auto">
-            {renderScreen()}
-          </main>
+        <React.Fragment>
+          {renderContent()}
           <Toast message={toastMessage} type={toastType} onClose={() => setToastMessage('')} />
-        </div>
+        </React.Fragment>
       );
     };
 
@@ -160,9 +545,18 @@
           `}
         >
           {icon}
-          <span>{text}</span>
+          <span className="ml-2">{text}</span>
         </button>
       </li>
+    );
+
+    // Componente MetricCard para o Dashboard
+    const MetricCard = ({ title, value, description }) => (
+      <div className="bg-blue-100 p-5 rounded-lg shadow-md border-l-4 border-blue-500">
+        <h3 className="text-lg font-semibold text-gray-700">{title}</h3>
+        <p className="text-4xl font-bold text-blue-800 mt-2">{value}</p>
+        <p className="text-sm text-gray-600 mt-1">{description}</p>
+      </div>
     );
 
     // Componente da Tela de Dashboard
@@ -192,13 +586,31 @@
       );
     };
 
-    // Componente MetricCard para o Dashboard
-    const MetricCard = ({ title, value, description }) => (
-      <div className="bg-blue-100 p-5 rounded-lg shadow-md border-l-4 border-blue-500">
-        <h3 className="text-lg font-semibold text-gray-700">{title}</h3>
-        <p className="text-4xl font-bold text-blue-800 mt-2">{value}</p>
-        <p className="text-sm text-gray-600 mt-1">{description}</p>
-      </div>
+    // Botão de Aba para Gestão de Conteúdo
+    const TabButton = ({ text, isActive, onClick }) => (
+      <button
+        onClick={onClick}
+        className={`
+          whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-200
+          ${isActive
+            ? 'border-green-600 text-green-600'
+            : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+          }
+        `}
+      >
+        {text}
+      </button>
+    );
+
+    // Botão de Ação para gestão de conteúdo
+    const ActionButton = ({ icon, onClick, tooltip, className }) => (
+      <button
+        onClick={onClick}
+        className={`p-2 rounded-full text-white shadow-sm transition duration-200 ${className}`}
+        title={tooltip}
+      >
+        {icon}
+      </button>
     );
 
     // Componente da Tela de Gestão de Conteúdo
@@ -255,9 +667,7 @@
       };
 
       const deleteContent = (type, id) => {
-        // Substituindo window.confirm por um modal personalizado para conformidade com as diretrizes
-        // Para esta demonstração, vou manter a confirmação direto aqui.
-        if (confirm(`Tem certeza que deseja excluir ${type} ID: ${id}?`)) { // Usando confirm para fins de exemplo
+        if (window.confirm(`Tem certeza que deseja excluir ${type} ID: ${id}?`)) { // Usando window.confirm para fins de exemplo
           const { state, setter } = contentMap[type];
           setter(state.filter(item => item.id !== id));
           showToast(`${type} ID: ${id} excluído com sucesso.`, 'success');
@@ -278,7 +688,8 @@
           const chatHistory = [];
           chatHistory.push({ role: "user", parts: [{ text: prompt }] });
           const payload = { contents: chatHistory };
-          const apiKey = "AIzaSyD5qz7sG8XNDT38cUWO2OXvAruhHmHo8FY"; // Chave de API inserida aqui
+          // A chave de API Gemini foi inserida para demonstração. Em produção, use um backend.
+          const apiKey = "AIzaSyD5qz7sG8XNDT38cUWO2OXvAruhHmHo8FY"; 
           const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
           const response = await fetch(apiUrl, {
@@ -319,7 +730,8 @@
           const chatHistory = [];
           chatHistory.push({ role: "user", parts: [{ text: prompt }] });
           const payload = { contents: chatHistory };
-          const apiKey = "AIzaSyD5qz7sG8XNDT38cUWO2OXvAruhHmHo8FY"; // Chave de API inserida aqui
+          // A chave de API Gemini foi inserida para demonstração. Em produção, use um backend.
+          const apiKey = "AIzaSyD5qz7sG8XNDT38cUWO2OXvAruhHmHo8FY"; 
           const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
           const response = await fetch(apiUrl, {
@@ -535,7 +947,7 @@
                   className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow-md transition duration-200"
                 >
                   <PlusCircleIcon className="mr-2" size={20} /> Adicionar Novo Checklist
-                </button>
+                  </button>
               </div>
               <ul className="space-y-4">
                 {checklists.map(checklist => (
@@ -637,9 +1049,7 @@
 
       // Exclui um usuário
       const deleteUser = (id) => {
-        // Substituindo window.confirm por um modal personalizado para conformidade com as diretrizes
-        // Para esta demonstração, vou manter a confirmação direto aqui.
-        if (confirm(`Tem certeza que deseja excluir o usuário ID: ${id}?`)) { // Usando confirm para fins de exemplo
+        if (window.confirm(`Tem certeza que deseja excluir o usuário ID: ${id}?`)) { // Usando window.confirm para fins de exemplo
           setUsers(prevUsers => prevUsers.filter(user => user.id !== id));
           showToast('Usuário excluído com sucesso.', 'success');
         }
@@ -674,13 +1084,13 @@
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
                         <ActionButton
-                          icon={user.status === 'Ativo' ? <XCircleIcon size={18} /> : <CheckCircleIcon size={18} />}
+                          icon={user.status === 'Ativo' ? <XCircleIcon className="w-5 h-5" /> : <CheckCircleIcon className="w-5 h-5" />}
                           onClick={() => toggleUserStatus(user.id)}
                           tooltip={user.status === 'Ativo' ? 'Inativar' : 'Ativar'}
                           className={user.status === 'Ativo' ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-green-500 hover:bg-green-600'}
                         />
                         <ActionButton
-                          icon={<Trash2Icon size={18} />}
+                          icon={<Trash2Icon className="w-5 h-5" />}
                           onClick={() => deleteUser(user.id)}
                           tooltip="Excluir"
                           className="bg-red-500 hover:bg-red-600"
@@ -740,7 +1150,8 @@
           const chatHistory = [];
           chatHistory.push({ role: "user", parts: [{ text: prompt }] });
           const payload = { contents: chatHistory };
-          const apiKey = "AIzaSyD5qz7sG8XNDT38cUWO2OXvAruhHmHo8FY"; // Chave de API inserida aqui
+          // A chave de API Gemini foi inserida para demonstração. Em produção, use um backend.
+          const apiKey = "AIzaSyD5qz7sG8XNDT38cUWO2OXvAruhHmHo8FY"; 
           const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
           const response = await fetch(apiUrl, {
@@ -801,7 +1212,7 @@
                         }}
                         className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg flex items-center shadow-md transition duration-200"
                       >
-                        <SparklesIcon className="mr-2" size={20} /> Sugerir Resposta
+                        <SparklesIcon className="w-5 h-5 mr-2" /> Sugerir Resposta
                       </button>
                       <button
                         onClick={() => markAsResolved(doubt.id)}
